@@ -906,7 +906,7 @@ function LandingPage({ onLogin }) {
       <nav className="navbar">
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, var(--accent-gold), var(--accent-violet))", boxShadow: "0 0 15px rgba(200,147,74,0.4)" }} />
-          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, letterSpacing: "-0.01em" }}>srijanai</span>
+          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, letterSpacing: "-0.01em" }}>SrijanAI</span>
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           <button className="btn-ghost btn-sm" onClick={onLogin}>Login</button>
@@ -1065,7 +1065,7 @@ function AuthPage({ onAuth }) {
         <div style={{ width: "100%", maxWidth: 400, animation: "fadeUp 0.5s ease" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 40 }}>
             <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, var(--accent-gold), var(--accent-violet))", boxShadow: "0 0 15px rgba(200,147,74,0.4)" }} />
-            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 20 }}>srijanai</span>
+            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 20 }}>SrijanAI</span>
           </div>
 
           <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 400, marginBottom: 8 }}>
@@ -1904,7 +1904,7 @@ export default function App() {
         <nav className="navbar" style={{ zIndex: 200 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setPage("dashboard")}>
             <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, var(--accent-gold), var(--accent-violet))", boxShadow: "0 0 15px rgba(200,147,74,0.4)" }} />
-            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18 }}>srijanai</span>
+            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18 }}>SrijanAI</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {page !== "dashboard" && (
