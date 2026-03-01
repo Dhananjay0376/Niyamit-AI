@@ -906,7 +906,7 @@ function LandingPage({ onLogin }) {
       <nav className="navbar">
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, var(--accent-gold), var(--accent-violet))", boxShadow: "0 0 15px rgba(200,147,74,0.4)" }} />
-          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, letterSpacing: "-0.01em" }}>NiyamitAI</span>
+          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, letterSpacing: "-0.01em" }}>srijanai</span>
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           <button className="btn-ghost btn-sm" onClick={onLogin}>Login</button>
@@ -1065,7 +1065,7 @@ function AuthPage({ onAuth }) {
         <div style={{ width: "100%", maxWidth: 400, animation: "fadeUp 0.5s ease" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 40 }}>
             <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, var(--accent-gold), var(--accent-violet))", boxShadow: "0 0 15px rgba(200,147,74,0.4)" }} />
-            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 20 }}>NiyamitAI</span>
+            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 20 }}>srijanai</span>
           </div>
 
           <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 400, marginBottom: 8 }}>
@@ -1806,22 +1806,22 @@ function PostDetailModal({ post, onClose, onRegenerate, addToast }) {
 export default function App() {
   // Load initial state from localStorage
   const [page, setPage] = useState(() => {
-    const saved = localStorage.getItem('niyamitai_page');
+    const saved = localStorage.getItem('srijanai_page');
     return saved || "landing";
   });
   
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('niyamitai_user');
+    const saved = localStorage.getItem('srijanai_user');
     return saved ? JSON.parse(saved) : null;
   });
   
   const [plans, setPlans] = useState(() => {
-    const saved = localStorage.getItem('niyamitai_plans');
+    const saved = localStorage.getItem('srijanai_plans');
     return saved ? JSON.parse(saved) : [];
   });
   
   const [currentPlan, setCurrentPlan] = useState(() => {
-    const saved = localStorage.getItem('niyamitai_currentPlan');
+    const saved = localStorage.getItem('srijanai_currentPlan');
     return saved ? JSON.parse(saved) : null;
   });
   
@@ -1829,26 +1829,26 @@ export default function App() {
 
   // Save to localStorage whenever state changes
   useEffect(() => {
-    localStorage.setItem('niyamitai_page', page);
+    localStorage.setItem('srijanai_page', page);
   }, [page]);
 
   useEffect(() => {
     if (user) {
-      localStorage.setItem('niyamitai_user', JSON.stringify(user));
+      localStorage.setItem('srijanai_user', JSON.stringify(user));
     } else {
-      localStorage.removeItem('niyamitai_user');
+      localStorage.removeItem('srijanai_user');
     }
   }, [user]);
 
   useEffect(() => {
-    localStorage.setItem('niyamitai_plans', JSON.stringify(plans));
+    localStorage.setItem('srijanai_plans', JSON.stringify(plans));
   }, [plans]);
 
   useEffect(() => {
     if (currentPlan) {
-      localStorage.setItem('niyamitai_currentPlan', JSON.stringify(currentPlan));
+      localStorage.setItem('srijanai_currentPlan', JSON.stringify(currentPlan));
     } else {
-      localStorage.removeItem('niyamitai_currentPlan');
+      localStorage.removeItem('srijanai_currentPlan');
     }
   }, [currentPlan]);
 
@@ -1889,10 +1889,10 @@ export default function App() {
     setCurrentPlan(null); 
     setPage("landing");
     // Clear localStorage on logout
-    localStorage.removeItem('niyamitai_user');
-    localStorage.removeItem('niyamitai_plans');
-    localStorage.removeItem('niyamitai_currentPlan');
-    localStorage.setItem('niyamitai_page', 'landing');
+    localStorage.removeItem('srijanai_user');
+    localStorage.removeItem('srijanai_plans');
+    localStorage.removeItem('srijanai_currentPlan');
+    localStorage.setItem('srijanai_page', 'landing');
   };
 
   return (
@@ -1904,7 +1904,7 @@ export default function App() {
         <nav className="navbar" style={{ zIndex: 200 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => setPage("dashboard")}>
             <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, var(--accent-gold), var(--accent-violet))", boxShadow: "0 0 15px rgba(200,147,74,0.4)" }} />
-            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18 }}>NiyamitAI</span>
+            <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 18 }}>srijanai</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {page !== "dashboard" && (

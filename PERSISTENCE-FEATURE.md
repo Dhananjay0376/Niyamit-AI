@@ -43,30 +43,30 @@ Added localStorage persistence to save all your data in the browser.
 ### On Page Load
 ```javascript
 // Automatically loads from localStorage
-const user = localStorage.getItem('niyamitai_user');
-const plans = localStorage.getItem('niyamitai_plans');
-const currentPlan = localStorage.getItem('niyamitai_currentPlan');
-const page = localStorage.getItem('niyamitai_page');
+const user = localStorage.getItem('srijanai_user');
+const plans = localStorage.getItem('srijanai_plans');
+const currentPlan = localStorage.getItem('srijanai_currentPlan');
+const page = localStorage.getItem('srijanai_page');
 ```
 
 ### On State Change
 ```javascript
 // Automatically saves to localStorage
 useEffect(() => {
-  localStorage.setItem('niyamitai_user', JSON.stringify(user));
+  localStorage.setItem('srijanai_user', JSON.stringify(user));
 }, [user]);
 
 useEffect(() => {
-  localStorage.setItem('niyamitai_plans', JSON.stringify(plans));
+  localStorage.setItem('srijanai_plans', JSON.stringify(plans));
 }, [plans]);
 ```
 
 ### On Logout
 ```javascript
 // Clears all saved data
-localStorage.removeItem('niyamitai_user');
-localStorage.removeItem('niyamitai_plans');
-localStorage.removeItem('niyamitai_currentPlan');
+localStorage.removeItem('srijanai_user');
+localStorage.removeItem('srijanai_plans');
+localStorage.removeItem('srijanai_currentPlan');
 ```
 
 ---
@@ -75,10 +75,10 @@ localStorage.removeItem('niyamitai_currentPlan');
 
 | Key | Description | Data Type |
 |-----|-------------|-----------|
-| `niyamitai_user` | User session data | JSON object |
-| `niyamitai_plans` | All content plans | JSON array |
-| `niyamitai_currentPlan` | Currently viewing plan | JSON object |
-| `niyamitai_page` | Current page/route | String |
+| `srijanai_user` | User session data | JSON object |
+| `srijanai_plans` | All content plans | JSON array |
+| `srijanai_currentPlan` | Currently viewing plan | JSON object |
+| `srijanai_page` | Current page/route | String |
 
 ---
 
@@ -129,7 +129,7 @@ localStorage.removeItem('niyamitai_currentPlan');
 ### Test 4: Logout
 1. Click logout
 2. Check localStorage (F12 → Application → Local Storage)
-3. ✅ All niyamitai_* keys should be cleared
+3. ✅ All srijanai_* keys should be cleared
 
 ---
 
