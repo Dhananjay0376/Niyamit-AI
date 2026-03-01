@@ -1804,11 +1804,53 @@ function PostDetailModal({ post, onClose, onRegenerate, addToast }) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [page, setPage] = useState("landing");
-  const [user, setUser] = useState(null);
-  const [plans, setPlans] = useState([]);
-  const [currentPlan, setCurrentPlan] = useState(null);
+  // Load initial state from localStorage
+  const [page, setPage] = useState(() => {
+    const saved = localStorage.getItem('niyamitai_page');
+    return saved || "landing";
+  });
+  
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('niyamitai_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  
+  const [plans, setPlans] = useState(() => {
+    const saved = localStorage.getItem('niyamitai_plans');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [currentPlan, setCurrentPlan] = useState(() => {
+    const saved = localStorage.getItem('niyamitai_currentPlan');
+    return saved ? JSON.parse(saved) : null;
+  });
+  
   const [toasts, setToasts] = useState([]);
+
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    localStorage.setItem('niyamitai_page', page);
+  }, [page]);
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('niyamitai_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('niyamitai_user');
+    }
+  }, [user]);
+
+  useEffect(() => {
+    localStorage.setItem('niyamitai_plans', JSON.stringify(plans));
+  }, [plans]);
+
+  useEffect(() => {
+    if (currentPlan) {
+      localStorage.setItem('niyamitai_currentPlan', JSON.stringify(currentPlan));
+    } else {
+      localStorage.removeItem('niyamitai_currentPlan');
+    }
+  }, [currentPlan]);
 
   const addToast = useCallback((msg, type = "info") => {
     const id = Date.now();
@@ -1842,7 +1884,15 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    setUser(null); setPlans([]); setCurrentPlan(null); setPage("landing");
+    setUser(null); 
+    setPlans([]); 
+    setCurrentPlan(null); 
+    setPage("landing");
+    // Clear localStorage on logout
+    localStorage.removeItem('niyamitai_user');
+    localStorage.removeItem('niyamitai_plans');
+    localStorage.removeItem('niyamitai_currentPlan');
+    localStorage.setItem('niyamitai_page', 'landing');
   };
 
   return (
