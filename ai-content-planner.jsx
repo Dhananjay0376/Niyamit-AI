@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
+// ─── CLAUDE API CONFIGURATION ────────────────────────────────────────────────
+// Backend proxy endpoint (no API key needed in frontend)
+const BACKEND_API_ENDPOINT = "http://localhost:3001/api/generate";
+const CLAUDE_MODEL = "claude-sonnet-4-20250514";
+
 // ─── GOOGLE FONTS ───────────────────────────────────────────────────────────
 const FontLoader = () => (
   <style>{`
@@ -726,6 +731,50 @@ function getSampleTitles(niche, count) {
   for (let i = 0; i < count; i++) result.push(titles[i % titles.length]);
   return result;
 }
+async function generateTitlesWithAI(niche, count, platform, language, tone) {
+  try {
+    const response = await fetch(BACKEND_API_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 500,
+        system: `You are an expert content strategist for Indian ${platform} creators. Generate exactly ${count} viral post titles for the ${niche} niche. Language: ${language}. Tone: ${tone}. Return ONLY a JSON array of strings, no other text.`,
+        messages: [{
+          role: "user",
+          content: `Generate ${count} engaging post titles for ${niche} content on ${platform}. Make them scroll-stopping and relevant to Indian audiences.`
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text || "";
+
+    if (!text) {
+      throw new Error("Empty response from API");
+    }
+
+    const clean = text.replace(/```json|```/g, "").trim();
+    const titles = JSON.parse(clean);
+
+    if (!Array.isArray(titles) || titles.length === 0) {
+      throw new Error("Invalid response format");
+    }
+
+    return titles.slice(0, count);
+  } catch (error) {
+    console.error("AI title generation failed:", error);
+    // Fallback to template system
+    return getSampleTitles(niche, count);
+  }
+}
+
 
 function distributeDates(year, month, count, mode) {
   const dates = [];
@@ -987,7 +1036,7 @@ function AuthPage({ onAuth }) {
   const demoLogin = async () => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    onAuth({ name: "Arjun Sharma", email: "demo@creator.in" });
+    onAuth({ name: "Dhananjay Narula", email: "demo@creator.in" });
     setLoading(false);
   };
 
@@ -1193,7 +1242,16 @@ function CreatePlanPage({ onBack, onCreate }) {
   const handleCreate = async () => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 1800));
-    const titles = getSampleTitles(resolvedNiche, resolvedPosts);
+    
+    // Generate titles using AI
+    const titles = await generateTitlesWithAI(
+      resolvedNiche,
+      resolvedPosts,
+      form.platform,
+      form.language,
+      form.tone
+    );
+    
     const posts = previewDates.map((day, i) => ({
       id: `post-${Date.now()}-${i}`,
       title: titles[i],
@@ -1428,24 +1486,47 @@ function CalendarPage({ plan, onBack, onUpdate, addToast }) {
     updatePost(post.id, { status: "confirmed" });
     await new Promise(r => setTimeout(r, 1500));
 
-    // Call Claude API for real generation
+    // Call Claude API via backend proxy
     let generatedPost;
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch(BACKEND_API_ENDPOINT, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: CLAUDE_MODEL,
           max_tokens: 1000,
           system: `You are an expert content creator for Indian ${plan.platform} creators. Return ONLY valid JSON with these exact keys: hook, caption, hashtags, cta, platform_note. Language: ${plan.language}. Tone: ${plan.tone}. Niche: ${plan.niche}. Rules: hook is 1-2 lines that stop the scroll. caption is the full post body with line breaks, ${plan.language === "hinglish" ? "use natural Hinglish as Indian creators do" : ""}. hashtags is 15-20 space-separated hashtags. cta is a warm call-to-action. platform_note is one practical posting tip. Return ONLY valid JSON.`,
           messages: [{ role: "user", content: `Create a complete post for this title: "${post.title}". Platform: ${plan.platform}, Niche: ${plan.niche}, Tone: ${plan.tone}, Language: ${plan.language}` }]
         })
       });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
       const data = await response.json();
       const text = data.content?.[0]?.text || "";
+      
+      if (!text) {
+        throw new Error("Empty response from API");
+      }
+
       const clean = text.replace(/```json|```/g, "").trim();
-      generatedPost = JSON.parse(clean);
-    } catch {
+      const parsed = JSON.parse(clean);
+
+      // Validate required fields
+      const requiredFields = ["hook", "caption", "hashtags", "cta", "platform_note"];
+      const missingFields = requiredFields.filter(field => !parsed[field]);
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+      }
+
+      generatedPost = parsed;
+    } catch (error) {
+      console.error("AI generation failed:", error.message);
       // Fallback to demo data
       const key = `${plan.niche}_${plan.platform}_${plan.language}`;
       generatedPost = DEMO_POSTS[key] || DEMO_POSTS.exam_instagram_hinglish;
