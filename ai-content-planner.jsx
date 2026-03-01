@@ -733,6 +733,10 @@ function getSampleTitles(niche, count) {
 }
 async function generateTitlesWithAI(niche, count, platform, language, tone) {
   try {
+    // Add timestamp and random seed for variation
+    const timestamp = Date.now();
+    const randomSeed = Math.floor(Math.random() * 10000);
+    
     const response = await fetch(BACKEND_API_ENDPOINT, {
       method: "POST",
       headers: {
@@ -741,10 +745,10 @@ async function generateTitlesWithAI(niche, count, platform, language, tone) {
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: 500,
-        system: `You are an expert content strategist for Indian ${platform} creators. Generate exactly ${count} viral post titles for the ${niche} niche. Language: ${language}. Tone: ${tone}. Return ONLY a JSON array of strings, no other text.`,
+        system: `You are an expert content strategist for Indian ${platform} creators. Generate exactly ${count} UNIQUE and DIVERSE viral post titles for the ${niche} niche. Language: ${language}. Tone: ${tone}. IMPORTANT: Create completely different titles each time - avoid repetition. Return ONLY a JSON array of strings, no other text. Seed: ${randomSeed}`,
         messages: [{
           role: "user",
-          content: `Generate ${count} engaging post titles for ${niche} content on ${platform}. Make them scroll-stopping and relevant to Indian audiences.`
+          content: `Generate ${count} engaging and VARIED post titles for ${niche} content on ${platform}. Make them scroll-stopping and relevant to Indian audiences. Each title should be unique and different from common templates. Request ID: ${timestamp}`
         }]
       })
     });
@@ -1497,7 +1501,7 @@ function CalendarPage({ plan, onBack, onUpdate, addToast }) {
         body: JSON.stringify({
           model: CLAUDE_MODEL,
           max_tokens: 1000,
-          system: `You are an expert content creator for Indian ${plan.platform} creators. Return ONLY valid JSON with these exact keys: hook, caption, hashtags, cta, platform_note. Language: ${plan.language}. Tone: ${plan.tone}. Niche: ${plan.niche}. Rules: hook is 1-2 lines that stop the scroll. caption is the full post body with line breaks, ${plan.language === "hinglish" ? "use natural Hinglish as Indian creators do" : ""}. hashtags is 15-20 space-separated hashtags. cta is a warm call-to-action. platform_note is one practical posting tip. Return ONLY valid JSON.`,
+          system: `You are an expert content creator for Indian ${plan.platform} creators. Return ONLY valid JSON with these exact keys: hook, caption, hashtags, cta, platform_note. Language: ${plan.language}. Tone: ${plan.tone}. Niche: ${plan.niche}. Rules: hook is 1-2 lines that stop the scroll. caption is the full post body (use \\n for line breaks, NOT actual newlines). hashtags is 15-20 space-separated hashtags. cta is a warm call-to-action. platform_note is one practical posting tip. CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON that can be parsed by JSON.parse().`,
           messages: [{ role: "user", content: `Create a complete post for this title: "${post.title}". Platform: ${plan.platform}, Niche: ${plan.niche}, Tone: ${plan.tone}, Language: ${plan.language}` }]
         })
       });
@@ -1513,9 +1517,33 @@ function CalendarPage({ plan, onBack, onUpdate, addToast }) {
         throw new Error("Empty response from API");
       }
 
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-
+      // Remove markdown code blocks
+      let clean = text.replace(/```json|```/g, "").trim();
+      
+      // Try to parse as-is first
+      let parsed;
+      try {
+        parsed = JSON.parse(clean);
+      } catch (firstError) {
+        // If parsing fails, try to fix common issues
+        console.log('First parse failed, attempting to fix JSON...');
+        
+        // Replace literal newlines, tabs, and control chars in the entire string
+        clean = clean
+          .replace(/\r\n/g, '\\n')  // Windows line endings
+          .replace(/\n/g, '\\n')     // Unix line endings
+          .replace(/\r/g, '\\r')     // Mac line endings
+          .replace(/\t/g, '\\t')     // Tabs
+          .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, ''); // Other control chars
+        
+        try {
+          parsed = JSON.parse(clean);
+        } catch (secondError) {
+          console.error('JSON parse failed even after cleanup:', clean.substring(0, 500));
+          throw new Error(`JSON parsing failed: ${secondError.message}`);
+        }
+      }
+      
       // Validate required fields
       const requiredFields = ["hook", "caption", "hashtags", "cta", "platform_note"];
       const missingFields = requiredFields.filter(field => !parsed[field]);

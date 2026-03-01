@@ -27,6 +27,18 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 const OPENROUTER_MODEL = "meta-llama/llama-3.2-3b-instruct:free"; // Free model
 const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
 
+// Helper function to sanitize AI response for JSON parsing
+function sanitizeJsonResponse(text) {
+  // Remove markdown code blocks
+  let clean = text.replace(/```json|```/g, "").trim();
+  
+  // Remove only problematic control characters that break JSON parsing
+  // Keep the text as-is otherwise since it's already formatted JSON
+  clean = clean.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+  
+  return clean;
+}
+
 // Helper function to convert to Claude format
 function toClaudeFormat(content, model) {
   return {
@@ -56,7 +68,7 @@ async function tryGroq(system, messages, max_tokens) {
         model: GROQ_MODEL,
         messages: groqMessages,
         max_tokens: max_tokens,
-        temperature: 0.7
+        temperature: 0.9  // Higher temperature for more creative variation
       })
     });
 
@@ -65,7 +77,9 @@ async function tryGroq(system, messages, max_tokens) {
     if (response.ok && data.choices && data.choices[0]) {
       const content = data.choices[0].message.content;
       console.log('✅ Groq API success (FREE!)');
-      return toClaudeFormat(content, GROQ_MODEL);
+      // Sanitize response before returning
+      const sanitized = sanitizeJsonResponse(content);
+      return toClaudeFormat(sanitized, GROQ_MODEL);
     } else {
       console.log('❌ Groq failed:', data.error?.message || 'Unknown error');
       return null;
@@ -96,7 +110,7 @@ async function tryGemini(system, messages, max_tokens) {
         }],
         generationConfig: {
           maxOutputTokens: max_tokens,
-          temperature: 0.7
+          temperature: 0.9  // Higher temperature for more creative variation
         }
       })
     });
@@ -106,7 +120,9 @@ async function tryGemini(system, messages, max_tokens) {
     if (response.ok && data.candidates && data.candidates[0]) {
       const content = data.candidates[0].content.parts[0].text;
       console.log('✅ Gemini API success (FREE!)');
-      return toClaudeFormat(content, 'gemini-1.5-flash');
+      // Sanitize response before returning
+      const sanitized = sanitizeJsonResponse(content);
+      return toClaudeFormat(sanitized, 'gemini-1.5-flash');
     } else {
       console.log('❌ Gemini failed:', data.error?.message || 'Unknown error');
       return null;
@@ -139,7 +155,7 @@ async function tryOpenRouter(system, messages, max_tokens) {
         model: OPENROUTER_MODEL,
         messages: openRouterMessages,
         max_tokens: max_tokens,
-        temperature: 0.7
+        temperature: 0.9  // Higher temperature for more creative variation
       })
     });
 
@@ -148,7 +164,9 @@ async function tryOpenRouter(system, messages, max_tokens) {
     if (response.ok && data.choices && data.choices[0]) {
       const content = data.choices[0].message.content;
       console.log('✅ OpenRouter API success (FREE!)');
-      return toClaudeFormat(content, OPENROUTER_MODEL);
+      // Sanitize response before returning
+      const sanitized = sanitizeJsonResponse(content);
+      return toClaudeFormat(sanitized, OPENROUTER_MODEL);
     } else {
       console.log('❌ OpenRouter failed:', data.error?.message || 'Unknown error');
       return null;
