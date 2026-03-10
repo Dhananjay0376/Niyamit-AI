@@ -190,10 +190,24 @@ export async function generateWithFallback({ model, max_tokens, system, messages
     ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY
   };
 
+  let provider = null;
   let result = await tryGroq(system, messages, max_tokens, providerEnv);
-  if (!result) result = await tryGemini(system, messages, max_tokens, providerEnv);
-  if (!result) result = await tryOpenRouter(system, messages, max_tokens, providerEnv, referer);
-  if (!result) result = await tryAnthropic(system, messages, max_tokens, model, providerEnv);
+  if (result) provider = "groq";
 
-  return result;
+  if (!result) {
+    result = await tryGemini(system, messages, max_tokens, providerEnv);
+    if (result) provider = "gemini";
+  }
+
+  if (!result) {
+    result = await tryOpenRouter(system, messages, max_tokens, providerEnv, referer);
+    if (result) provider = "openrouter";
+  }
+
+  if (!result) {
+    result = await tryAnthropic(system, messages, max_tokens, model, providerEnv);
+    if (result) provider = "anthropic";
+  }
+
+  return { result, provider, providers: getProviderStatus(providerEnv) };
 }

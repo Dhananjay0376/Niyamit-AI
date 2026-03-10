@@ -764,7 +764,12 @@ async function generateTitlesWithAI(niche, count, platform, language, tone) {
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      let details = `API error: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        details = errorData.message || errorData.error || details;
+      } catch {}
+      throw new Error(details);
     }
 
     const data = await response.json();
@@ -1571,7 +1576,12 @@ CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON t
       });
 
       if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+        let details = `API error: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          details = errorData.message || errorData.error || details;
+        } catch {}
+        throw new Error(details);
       }
 
       const data = await response.json();
