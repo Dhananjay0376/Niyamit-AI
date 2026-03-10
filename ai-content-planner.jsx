@@ -1157,7 +1157,7 @@ function AuthPage({ onAuth }) {
 }
 
 // DASHBOARD
-function DashboardPage({ user, plans, onNewPlan, onViewCalendar }) {
+function DashboardPage({ user, plans, onNewPlan, onViewCalendar, onDeletePlan }) {
   const greeting = () => {
     const h = new Date().getHours();
     if (h < 12) return "Good morning";
@@ -1215,7 +1215,7 @@ function DashboardPage({ user, plans, onNewPlan, onViewCalendar }) {
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
-          {plans.map(p => <PlanCard key={p.id} plan={p} onView={() => onViewCalendar(p)} />)}
+          {plans.map(p => <PlanCard key={p.id} plan={p} onView={() => onViewCalendar(p)} onDelete={() => onDeletePlan(p)} />)}
         </div>
       )}
 
@@ -1235,7 +1235,7 @@ function DashboardPage({ user, plans, onNewPlan, onViewCalendar }) {
   );
 }
 
-function PlanCard({ plan, onView }) {
+function PlanCard({ plan, onView, onDelete }) {
   const generated = plan.posts.filter(p => p.status === "generated").length;
   const total = plan.posts.length;
   const pct = total > 0 ? (generated / total) * 100 : 0;
@@ -1263,7 +1263,10 @@ function PlanCard({ plan, onView }) {
         <span>{generated}/{total} generated</span>
         {next && <span>Next: {plan.month}-{String(next.day).padStart(2, "0")}</span>}
       </div>
-      <button className="btn-ghost btn-sm" style={{ width: "100%" }} onClick={onView}>View Calendar →</button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn-ghost btn-sm" style={{ flex: 1 }} onClick={onView}>View Calendar →</button>
+        <button className="btn-ghost btn-sm" style={{ color: "#E07A7A", borderColor: "rgba(224,122,122,0.25)" }} onClick={onDelete}>Delete</button>
+      </div>
     </div>
   );
 }
@@ -1510,7 +1513,7 @@ function CreatePlanPage({ onBack, onCreate }) {
 }
 
 // CALENDAR PAGE
-function CalendarPage({ plan, onBack, onUpdate, addToast }) {
+function CalendarPage({ plan, onBack, onUpdate, onDeletePlan, addToast }) {
   const [selectedPost, setSelectedPost] = useState(null);
   const [generating, setGenerating] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -1708,6 +1711,9 @@ CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON t
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>August 2025</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button className="btn-ghost btn-sm" style={{ color: "#E07A7A", borderColor: "rgba(224,122,122,0.25)" }} onClick={() => onDeletePlan(plan)}>
+            Delete Calendar
+          </button>
           <span className="badge badge-pending">{stats.pending} pending</span>
           <span className="badge badge-confirmed">{stats.confirmed} confirmed</span>
           <span className="badge badge-generated">{stats.generated} generated</span>
@@ -1956,6 +1962,16 @@ export default function App() {
     setPage("calendar");
   };
 
+  const handleDeletePlan = (planToDelete) => {
+    const confirmed = window.confirm(`Delete this calendar for ${planToDelete.niche} on ${planToDelete.platform}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setPlans(p => p.filter(x => x.id !== planToDelete.id));
+    setCurrentPlan(current => current?.id === planToDelete.id ? null : current);
+    setPage(current => current === "calendar" ? "dashboard" : current);
+    addToast("Calendar deleted.", "success");
+  };
+
   const handleLogout = () => {
     setUser(null); 
     setPlans([]); 
@@ -1997,9 +2013,9 @@ export default function App() {
       {/* Pages */}
       {page === "landing" && <LandingPage onLogin={() => setPage("auth")} />}
       {page === "auth" && <AuthPage onAuth={handleAuth} />}
-      {page === "dashboard" && user && <DashboardPage user={user} plans={plans} onNewPlan={handleNewPlan} onViewCalendar={handleViewCalendar} />}
+      {page === "dashboard" && user && <DashboardPage user={user} plans={plans} onNewPlan={handleNewPlan} onViewCalendar={handleViewCalendar} onDeletePlan={handleDeletePlan} />}
       {page === "create" && <CreatePlanPage onBack={() => setPage("dashboard")} onCreate={handleCreatePlan} />}
-      {page === "calendar" && currentPlan && <CalendarPage plan={currentPlan} onBack={() => setPage("dashboard")} onUpdate={handleUpdatePlan} addToast={addToast} />}
+      {page === "calendar" && currentPlan && <CalendarPage plan={currentPlan} onBack={() => setPage("dashboard")} onUpdate={handleUpdatePlan} onDeletePlan={handleDeletePlan} addToast={addToast} />}
 
       {/* Toast container */}
       <div style={{ position: "fixed", bottom: 24, right: 24, display: "flex", flexDirection: "column", gap: 8, zIndex: 9999 }}>
