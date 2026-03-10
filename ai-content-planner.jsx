@@ -1,8 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── CLAUDE API CONFIGURATION ────────────────────────────────────────────────
-// Backend proxy endpoint (no API key needed in frontend)
-const BACKEND_API_ENDPOINT = "http://localhost:3001/api/generate";
+// Backend proxy endpoint:
+// - local dev falls back to the Express server on :3001
+// - production/Vercel uses the same-origin serverless route
+const API_BASE_URL = (() => {
+  const envBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (envBaseUrl) return envBaseUrl.replace(/\/$/, "");
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+    return "http://localhost:3001";
+  }
+  return "";
+})();
+const BACKEND_API_ENDPOINT = `${API_BASE_URL}/api/generate`;
 const CLAUDE_MODEL = "claude-sonnet-4-20250514";
 
 // ─── GOOGLE FONTS ───────────────────────────────────────────────────────────
