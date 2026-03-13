@@ -1,4 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  createInitialMonthlyPlan,
+  continueMonthlyPlan,
+  getContentMemory,
+  getMonthlyPlanHistory,
+  rebuildMemories,
+  nextContinuationMonth,
+} from "./src/contentEngine.js";
 
 // ─── CLAUDE API CONFIGURATION ────────────────────────────────────────────────
 // Backend proxy endpoint:
@@ -14,6 +22,42 @@ const API_BASE_URL = (() => {
 })();
 const BACKEND_API_ENDPOINT = `${API_BASE_URL}/api/generate`;
 const CLAUDE_MODEL = "claude-sonnet-4-20250514";
+
+function getDefaultMonthString() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+async function requestAI({ system, messages, max_tokens, model = CLAUDE_MODEL }) {
+  const response = await fetch(BACKEND_API_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens,
+      system,
+      messages,
+    })
+  });
+
+  if (!response.ok) {
+    let details = `API error: ${response.status}`;
+    try {
+      const errorData = await response.json();
+      details = errorData.message || errorData.error || details;
+    } catch {}
+    throw new Error(details);
+  }
+
+  const data = await response.json();
+  const text = data.content?.[0]?.text || "";
+  if (!text) {
+    throw new Error("Empty response from API");
+  }
+  return text;
+}
 
 // ─── GOOGLE FONTS ───────────────────────────────────────────────────────────
 const FontLoader = () => (
@@ -1157,7 +1201,7 @@ function AuthPage({ onAuth }) {
 }
 
 // DASHBOARD
-function DashboardPage({ user, plans, onNewPlan, onViewCalendar, onDeletePlan }) {
+function DashboardPage({ user, plans, onNewPlan, onViewCalendar, onDeletePlan, onContinuePlan }) {
   const greeting = () => {
     const h = new Date().getHours();
     if (h < 12) return "Good morning";
@@ -1215,7 +1259,7 @@ function DashboardPage({ user, plans, onNewPlan, onViewCalendar, onDeletePlan })
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
-          {plans.map(p => <PlanCard key={p.id} plan={p} onView={() => onViewCalendar(p)} onDelete={() => onDeletePlan(p)} />)}
+          {plans.map(p => <PlanCard key={p.id} plan={p} onView={() => onViewCalendar(p)} onDelete={() => onDeletePlan(p)} onContinue={() => onContinuePlan(p)} />)}
         </div>
       )}
 
@@ -1235,11 +1279,12 @@ function DashboardPage({ user, plans, onNewPlan, onViewCalendar, onDeletePlan })
   );
 }
 
-function PlanCard({ plan, onView, onDelete }) {
-  const generated = plan.posts.filter(p => p.status === "generated").length;
-  const total = plan.posts.length;
+function PlanCard({ plan, onView, onDelete, onContinue }) {
+  const items = plan.content_items || plan.posts || [];
+  const generated = items.filter(p => p.status === "generated").length;
+  const total = items.length;
   const pct = total > 0 ? (generated / total) * 100 : 0;
-  const next = plan.posts.find(p => p.status === "pending" || p.status === "confirmed");
+  const next = items.find(p => p.status === "pending" || p.status === "confirmed");
   const nColor = NICHE_COLORS[plan.niche] || "var(--accent-gold)";
 
   return (
@@ -1256,6 +1301,11 @@ function PlanCard({ plan, onView, onDelete }) {
       <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
         {plan.language} · {plan.tone} · {total} posts
       </div>
+      {plan.month_theme && (
+        <div style={{ fontSize: 12, color: "var(--accent-gold)", lineHeight: 1.5, marginBottom: 12 }}>
+          {plan.month}: {plan.month_theme}
+        </div>
+      )}
       <div className="progress-bar" style={{ marginBottom: 8 }}>
         <div className="progress-fill" style={{ width: `${pct}%` }} />
       </div>
@@ -1265,6 +1315,7 @@ function PlanCard({ plan, onView, onDelete }) {
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn-ghost btn-sm" style={{ flex: 1 }} onClick={onView}>View Calendar →</button>
+        <button className="btn-ghost btn-sm" style={{ color: "var(--accent-gold)", borderColor: "rgba(200,147,74,0.25)" }} onClick={onContinue}>Continue</button>
         <button className="btn-ghost btn-sm" style={{ color: "#E07A7A", borderColor: "rgba(224,122,122,0.25)" }} onClick={onDelete}>Delete</button>
       </div>
     </div>
@@ -1272,53 +1323,88 @@ function PlanCard({ plan, onView, onDelete }) {
 }
 
 // CREATE PLAN WIZARD
-function CreatePlanPage({ onBack, onCreate }) {
+function CreatePlanPage({ onBack, onCreate, user, plans, memories, continuationSeed }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     niche: "", platform: "", language: "hinglish", tone: "Motivational",
-    posts_per_month: 15, distribution_mode: "mon_wed_fri", month: "2025-08"
+    posts_per_month: 15, distribution_mode: "mon_wed_fri", month: getDefaultMonthString()
   });
   const [customNiche, setCustomNiche] = useState("");
   const [customPosts, setCustomPosts] = useState("");
   const [useCustomPosts, setUseCustomPosts] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState(continuationSeed ? "continuation_generation" : "initial_month_generation");
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  // Resolve the actual niche key for title lookup (custom uses the typed label, lowercase-slugged)
-  const resolvedNiche = form.niche === "custom"
-    ? (customNiche.trim().toLowerCase().replace(/\s+/g, "-") || "custom")
-    : form.niche;
+  useEffect(() => {
+    if (!continuationSeed) return;
+    setForm({
+      niche: continuationSeed.niche,
+      platform: continuationSeed.platform,
+      language: continuationSeed.language,
+      tone: continuationSeed.tone,
+      posts_per_month: continuationSeed.posting_cadence?.posts_per_month || continuationSeed.posts_per_month || 15,
+      distribution_mode: continuationSeed.posting_cadence?.distribution_mode || continuationSeed.distribution_mode || "mon_wed_fri",
+      month: continuationSeed.nextMonth || getDefaultMonthString()
+    });
+    setMode("continuation_generation");
+  }, [continuationSeed]);
 
   const resolvedPosts = useCustomPosts
     ? (parseInt(customPosts) || 1)
     : form.posts_per_month;
-
-  const previewDates = distributeDates(2025, 8, resolvedPosts, form.distribution_mode);
+  const displayNiche = form.niche === "custom" ? (customNiche.trim() || "Custom") : form.niche;
+  const [previewYear, previewMonth] = form.month.split("-").map(Number);
+  const previewDates = distributeDates(previewYear, previewMonth, resolvedPosts, form.distribution_mode);
+  const platformHistory = form.platform ? getMonthlyPlanHistory(user.email, form.platform, plans) : [];
+  const platformMemory = form.platform ? getContentMemory(user.email, form.platform, memories) : null;
+  const suggestedContinuationMonth = form.platform ? nextContinuationMonth(user.email, form.platform, plans) : null;
 
   const handleCreate = async () => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1800));
-    
-    // Generate titles using AI
-    const titles = await generateTitlesWithAI(
-      resolvedNiche,
-      resolvedPosts,
-      form.platform,
-      form.language,
-      form.tone
-    );
-    
-    const posts = previewDates.map((day, i) => ({
-      id: `post-${Date.now()}-${i}`,
-      title: titles[i],
-      day,
-      status: "pending",
-      generatedPost: null,
-    }));
-    const displayNiche = form.niche === "custom" ? (customNiche.trim() || "Custom") : form.niche;
-    onCreate({ ...form, niche: displayNiche, posts_per_month: resolvedPosts, id: `plan-${Date.now()}`, posts, createdAt: new Date() });
-    setLoading(false);
+    try {
+      const creatorBrief = {
+        niche: displayNiche,
+        platform: form.platform,
+        language: form.language,
+        tone: form.tone,
+        targetMonth: form.month,
+        posting_cadence: {
+          posts_per_month: resolvedPosts,
+          distribution_mode: form.distribution_mode,
+        },
+        content_pillars: platformMemory?.content_pillars,
+        tone_profile: platformMemory?.tone_profile,
+        audience_profile: platformMemory?.audience_profile,
+        campaign_arc: platformMemory?.campaign_arc,
+      };
+
+      const result = mode === "continuation_generation" && platformHistory.length > 0
+        ? await continueMonthlyPlan({
+            creatorId: user.email,
+            platform: form.platform,
+            targetMonth: form.month,
+            creatorBrief,
+            plans,
+            memories,
+            requestAI,
+            distributeDates,
+          })
+        : await createInitialMonthlyPlan({
+            creatorId: user.email,
+            platform: form.platform,
+            creatorBrief,
+            plans,
+            memories,
+            requestAI,
+            distributeDates,
+          });
+
+      onCreate(result.plan, result.memory);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const step1Valid = form.niche && form.platform && (form.niche !== "custom" || customNiche.trim().length > 0);
@@ -1384,6 +1470,28 @@ function CreatePlanPage({ onBack, onCreate }) {
               </button>
             ))}
           </div>
+
+          {form.platform && platformHistory.length > 0 && (
+            <div style={{ background: "rgba(200,147,74,0.06)", border: "1px solid rgba(200,147,74,0.18)", borderRadius: 14, padding: 16, marginBottom: 24 }}>
+              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--accent-gold)", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 8 }}>
+                Continuation Memory
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6, marginBottom: 8 }}>
+                {platformHistory.length} prior month{platformHistory.length > 1 ? "s" : ""} found. Suggested next month: {suggestedContinuationMonth || "n/a"}.
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6, marginBottom: 12 }}>
+                Theme: {platformMemory?.current_month_theme || "Not set"}.
+              </div>
+              <div className="seg-control">
+                <button className={`seg-btn ${mode === "continuation_generation" ? "active" : ""}`} onClick={() => { setMode("continuation_generation"); if (suggestedContinuationMonth) set("month", suggestedContinuationMonth); }}>
+                  Continue series
+                </button>
+                <button className={`seg-btn ${mode === "initial_month_generation" ? "active" : ""}`} onClick={() => setMode("initial_month_generation")}>
+                  Start fresh
+                </button>
+              </div>
+            </div>
+          )}
 
           <label style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: "var(--accent-gold)", textTransform: "uppercase", letterSpacing: "0.1em", display: "block", marginBottom: 14 }}>LANGUAGE</label>
           <div className="seg-control" style={{ marginBottom: 28 }}>
@@ -1518,24 +1626,26 @@ function CalendarPage({ plan, onBack, onUpdate, onDeletePlan, addToast }) {
   const [generating, setGenerating] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
+  const planItems = plan.content_items || plan.posts || [];
 
   const [yr, mo] = plan.month.split("-").map(Number);
   const daysInMonth = new Date(yr, mo, 0).getDate();
   const firstDow = new Date(yr, mo - 1, 1).getDay();
 
   const postByDay = {};
-  plan.posts.forEach(p => { postByDay[p.day] = p; });
+  planItems.forEach(p => { postByDay[p.day] = p; });
 
   const stats = {
-    total: plan.posts.length,
-    generated: plan.posts.filter(p => p.status === "generated").length,
-    pending: plan.posts.filter(p => p.status === "pending").length,
-    skipped: plan.posts.filter(p => p.status === "skipped").length,
-    confirmed: plan.posts.filter(p => p.status === "confirmed").length,
+    total: planItems.length,
+    generated: planItems.filter(p => p.status === "generated").length,
+    pending: planItems.filter(p => p.status === "pending").length,
+    skipped: planItems.filter(p => p.status === "skipped").length,
+    confirmed: planItems.filter(p => p.status === "confirmed").length,
   };
 
   const updatePost = (id, changes) => {
-    onUpdate({ ...plan, posts: plan.posts.map(p => p.id === id ? { ...p, ...changes } : p) });
+    const nextItems = planItems.map(p => p.id === id ? { ...p, ...changes } : p);
+    onUpdate({ ...plan, posts: nextItems, content_items: nextItems });
   };
 
   const simulateGenerate = async (post) => {
@@ -1898,6 +2008,13 @@ export default function App() {
     const saved = localStorage.getItem('srijanai_plans');
     return saved ? JSON.parse(saved) : [];
   });
+
+  const [memories, setMemories] = useState(() => {
+    const saved = localStorage.getItem('srijanai_memories');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  const [createContext, setCreateContext] = useState(null);
   
   const [currentPlan, setCurrentPlan] = useState(() => {
     const saved = localStorage.getItem('srijanai_currentPlan');
@@ -1924,6 +2041,10 @@ export default function App() {
   }, [plans]);
 
   useEffect(() => {
+    localStorage.setItem('srijanai_memories', JSON.stringify(memories));
+  }, [memories]);
+
+  useEffect(() => {
     if (currentPlan) {
       localStorage.setItem('srijanai_currentPlan', JSON.stringify(currentPlan));
     } else {
@@ -1943,17 +2064,30 @@ export default function App() {
     addToast(`Welcome back, ${u.name}! 👋`, "success");
   };
 
-  const handleNewPlan = () => setPage("create");
+  const handleNewPlan = () => {
+    setCreateContext(null);
+    setPage("create");
+  };
 
-  const handleCreatePlan = (plan) => {
+  const handleCreatePlan = (plan, memory) => {
     setPlans(p => [...p, plan]);
+    if (memory) {
+      setMemories(current => ({
+        ...current,
+        [`${plan.creator_id}::${plan.platform}`]: memory,
+      }));
+    }
     setCurrentPlan(plan);
     setPage("calendar");
     addToast(`Calendar created! ${plan.posts.length} posts ready ✨`, "success");
   };
 
   const handleUpdatePlan = (updated) => {
-    setPlans(p => p.map(x => x.id === updated.id ? updated : x));
+    setPlans(p => {
+      const nextPlans = p.map(x => x.id === updated.id ? updated : x);
+      setMemories(current => rebuildMemories(nextPlans, current));
+      return nextPlans;
+    });
     setCurrentPlan(updated);
   };
 
@@ -1966,23 +2100,34 @@ export default function App() {
     const confirmed = window.confirm(`Delete this calendar for ${planToDelete.niche} on ${planToDelete.platform}? This cannot be undone.`);
     if (!confirmed) return;
 
-    setPlans(p => p.filter(x => x.id !== planToDelete.id));
+    setPlans(p => {
+      const nextPlans = p.filter(x => x.id !== planToDelete.id);
+      setMemories(current => rebuildMemories(nextPlans, current));
+      return nextPlans;
+    });
     setCurrentPlan(current => current?.id === planToDelete.id ? null : current);
     setPage(current => current === "calendar" ? "dashboard" : current);
     addToast("Calendar deleted.", "success");
   };
 
+  const handleContinuePlan = (plan) => {
+    setCreateContext({
+      ...plan,
+      nextMonth: nextContinuationMonth(plan.creator_id, plan.platform, plans) || getDefaultMonthString(),
+    });
+    setPage("create");
+  };
+
   const handleLogout = () => {
     setUser(null); 
-    setPlans([]); 
     setCurrentPlan(null); 
     setPage("landing");
-    // Clear localStorage on logout
     localStorage.removeItem('srijanai_user');
-    localStorage.removeItem('srijanai_plans');
     localStorage.removeItem('srijanai_currentPlan');
     localStorage.setItem('srijanai_page', 'landing');
   };
+
+  const visiblePlans = user ? plans.filter(plan => !plan.creator_id || plan.creator_id === user.email) : [];
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-page)", color: "var(--text-primary)", fontFamily: "'Outfit', sans-serif" }}>
@@ -2013,8 +2158,8 @@ export default function App() {
       {/* Pages */}
       {page === "landing" && <LandingPage onLogin={() => setPage("auth")} />}
       {page === "auth" && <AuthPage onAuth={handleAuth} />}
-      {page === "dashboard" && user && <DashboardPage user={user} plans={plans} onNewPlan={handleNewPlan} onViewCalendar={handleViewCalendar} onDeletePlan={handleDeletePlan} />}
-      {page === "create" && <CreatePlanPage onBack={() => setPage("dashboard")} onCreate={handleCreatePlan} />}
+      {page === "dashboard" && user && <DashboardPage user={user} plans={visiblePlans} onNewPlan={handleNewPlan} onViewCalendar={handleViewCalendar} onDeletePlan={handleDeletePlan} onContinuePlan={handleContinuePlan} />}
+      {page === "create" && user && <CreatePlanPage onBack={() => setPage("dashboard")} onCreate={handleCreatePlan} user={user} plans={plans} memories={memories} continuationSeed={createContext} />}
       {page === "calendar" && currentPlan && <CalendarPage plan={currentPlan} onBack={() => setPage("dashboard")} onUpdate={handleUpdatePlan} onDeletePlan={handleDeletePlan} addToast={addToast} />}
 
       {/* Toast container */}
