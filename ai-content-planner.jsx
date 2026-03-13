@@ -1402,6 +1402,52 @@ function CreatePlanPage({ onBack, onCreate, user, plans, memories, continuationS
           });
 
       onCreate(result.plan, result.memory);
+    } catch (error) {
+      console.error("Monthly planning engine failed, falling back to legacy title generation:", error);
+      const titles = await generateTitlesWithAI(
+        displayNiche.toLowerCase().replace(/\s+/g, "-"),
+        resolvedPosts,
+        form.platform,
+        form.language,
+        form.tone
+      );
+      const fallbackPosts = previewDates.map((day, index) => ({
+        id: `post-${Date.now()}-${index}`,
+        day,
+        date_or_slot: `${form.month}-${String(day).padStart(2, "0")}`,
+        pillar: platformMemory?.content_pillars?.[index % (platformMemory?.content_pillars?.length || 1)] || "General",
+        topic: `Fresh angle ${index + 1} for ${displayNiche}`,
+        hook: `A sharper take on ${displayNiche} for ${form.platform}.`,
+        title: titles[index] || `Content idea ${index + 1}`,
+        format: "Post",
+        objective: "Awareness",
+        audience_angle: platformMemory?.audience_profile || `${form.language} audience for ${displayNiche}`,
+        status: "pending",
+        generatedPost: null,
+      }));
+
+      onCreate({
+        id: `plan-${Date.now()}`,
+        plan_id: `plan-${Date.now()}`,
+        creator_id: user.email,
+        platform: form.platform,
+        niche: displayNiche,
+        language: form.language,
+        tone: form.tone,
+        month: form.month,
+        month_theme: `Foundational content plan for ${displayNiche}`,
+        continuity_from_plan_id: null,
+        posting_cadence: {
+          posts_per_month: resolvedPosts,
+          distribution_mode: form.distribution_mode,
+        },
+        continuity_summary: "Fallback plan created after structured AI planning failed.",
+        generation_notes: `Legacy fallback used: ${error.message}`,
+        dedupe_report: { blocked_count: 0, blocked_reasons: [], attempts: [], threshold: 0 },
+        content_items: fallbackPosts,
+        posts: fallbackPosts,
+        createdAt: new Date().toISOString(),
+      }, platformMemory || null);
     } finally {
       setLoading(false);
     }
@@ -1699,6 +1745,11 @@ function CalendarPage({ plan, onBack, onUpdate, onDeletePlan, addToast }) {
         parsed = JSON.parse(clean);
       } catch (firstError) {
         console.log("First parse failed, attempting to fix JSON...");
+        const firstObject = clean.indexOf("{");
+        const lastObject = clean.lastIndexOf("}");
+        if (firstObject !== -1 && lastObject !== -1 && lastObject > firstObject) {
+          clean = clean.slice(firstObject, lastObject + 1);
+        }
         clean = clean
           .replace(/\r\n/g, "\\n")
           .replace(/\n/g, "\\n")
@@ -2079,7 +2130,7 @@ export default function App() {
     }
     setCurrentPlan(plan);
     setPage("calendar");
-    addToast(`Calendar created! ${plan.posts.length} posts ready ✨`, "success");
+    addToast(`Calendar created! ${(plan.content_items || plan.posts || []).length} posts ready`, "success");
   };
 
   const handleUpdatePlan = (updated) => {

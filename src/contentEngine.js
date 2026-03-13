@@ -167,7 +167,7 @@ function buildContinuitySummary({ history, memory, targetMonth }) {
   );
   return [
     `Continuing from ${lastPlan.month} with theme "${lastPlan.month_theme}".`,
-    `Keep cadence ${memory.posting_cadence}.`,
+    `Keep cadence at ${memory.posting_cadence?.posts_per_month || "planned"} posts using ${memory.posting_cadence?.distribution_mode || "the existing"} schedule.`,
     `Persist tone "${memory.tone_profile}" and audience "${memory.audience_profile}".`,
     angles.length ? `Recent angles: ${angles.join("; ")}.` : "",
   ]
@@ -216,7 +216,21 @@ function buildCreatorBriefPayload({
 
 function parseJsonResponse(text) {
   const clean = String(text || "").replace(/```json|```/g, "").trim();
-  return JSON.parse(clean);
+  try {
+    return JSON.parse(clean);
+  } catch {
+    const firstObject = clean.indexOf("{");
+    const lastObject = clean.lastIndexOf("}");
+    if (firstObject !== -1 && lastObject !== -1 && lastObject > firstObject) {
+      return JSON.parse(clean.slice(firstObject, lastObject + 1));
+    }
+    const firstArray = clean.indexOf("[");
+    const lastArray = clean.lastIndexOf("]");
+    if (firstArray !== -1 && lastArray !== -1 && lastArray > firstArray) {
+      return JSON.parse(clean.slice(firstArray, lastArray + 1));
+    }
+    throw new Error("Unable to parse JSON response");
+  }
 }
 
 async function requestStructuredItems({
@@ -230,8 +244,8 @@ async function requestStructuredItems({
   itemCount,
   blockedExamples,
 }) {
-  const responseText = await requestAI({
-    max_tokens: 2200,
+  const buildRequest = (strict = false) => ({
+    max_tokens: strict ? 1400 : 2200,
     system: `You are a content strategy engine. Return ONLY valid JSON with keys: month_theme, continuity_summary, generation_notes, content_items.
 
 Generate exactly ${itemCount} content_items for ${platform}.
@@ -250,7 +264,7 @@ Rules:
 - Keep the voice aligned to the creator brief.
 - Avoid duplicates and avoid reusing blocked titles/hooks/topics.
 - Do not output markdown.
-- Keep titles and hooks specific, practical, and distinct from each other.`,
+${strict ? "- Output compact JSON only. No commentary before or after the JSON object." : "- Keep titles and hooks specific, practical, and distinct from each other."}`,
     messages: [{
       role: "user",
       content: JSON.stringify({
@@ -266,7 +280,12 @@ Rules:
     }],
   });
 
-  const parsed = parseJsonResponse(responseText);
+  let parsed;
+  try {
+    parsed = parseJsonResponse(await requestAI(buildRequest(false)));
+  } catch {
+    parsed = parseJsonResponse(await requestAI(buildRequest(true)));
+  }
   if (!Array.isArray(parsed.content_items) || parsed.content_items.length === 0) {
     throw new Error("Invalid structured plan response");
   }
