@@ -394,6 +394,59 @@ function dedupePlanItems(items, history, platform) {
   };
 }
 
+function ensurePlanCoverage({
+  accepted,
+  originalItems,
+  creatorBrief,
+  monthTheme,
+  blockedExamples,
+  itemCount,
+}) {
+  const normalizedAcceptedTitles = new Set(
+    accepted.map((item) => normalizeText(item.title))
+  );
+  const recovered = [...accepted];
+
+  for (const item of originalItems) {
+    if (recovered.length >= itemCount) break;
+    const normalizedTitle = normalizeText(item.title);
+    if (normalizedAcceptedTitles.has(normalizedTitle)) continue;
+    recovered.push({
+      ...item,
+      generation_fingerprint: item.generation_fingerprint || computeFingerprint(item),
+      dedupe_relaxed: true,
+    });
+    normalizedAcceptedTitles.add(normalizedTitle);
+  }
+
+  if (recovered.length < itemCount) {
+    const filler = buildFallbackItems({
+      creatorBrief,
+      postingCadence: creatorBrief.posting_cadence?.distribution_mode || "daily",
+      monthTheme,
+      itemCount: itemCount * 2,
+      blockedExamples,
+    }).content_items;
+
+    for (const item of filler) {
+      if (recovered.length >= itemCount) break;
+      const normalizedTitle = normalizeText(item.title);
+      if (normalizedAcceptedTitles.has(normalizedTitle)) continue;
+      recovered.push({
+        ...item,
+        id: `item-${Date.now()}-fill-${recovered.length}`,
+        status: "pending",
+        generatedPost: null,
+        generation_fingerprint: computeFingerprint(item),
+        dedupe_relaxed: true,
+      });
+      normalizedAcceptedTitles.add(normalizedTitle);
+    }
+  }
+
+  return recovered.slice(0, itemCount);
+}
+
 function nextMonthString(month) {
   const [year, part] = String(month).split("-").map(Number);
   const date = new Date(year, part - 1, 1);
@@ -560,8 +613,17 @@ async function generatePlan({
     dedupeAttempts.push({ blocked: pass.blocked.length });
   }
 
-  const slots = makeDateSlots(targetMonth, pass.accepted.length, brief.posting_cadence.distribution_mode, distributeDates);
-  const finalItems = pass.accepted.slice(0, slots.length).map((item, index) => ({
+  const coveredItems = ensurePlanCoverage({
+    accepted: pass.accepted,
+    originalItems: contentItems,
+    creatorBrief: brief,
+    monthTheme: generated.month_theme || payload.monthTheme,
+    blockedExamples,
+    itemCount,
+  });
+
+  const slots = makeDateSlots(targetMonth, coveredItems.length, brief.posting_cadence.distribution_mode, distributeDates);
+  const finalItems = coveredItems.slice(0, slots.length).map((item, index) => ({
     ...item,
     ...slots[index],
     generation_fingerprint: item.generation_fingerprint || computeFingerprint(item),
@@ -592,6 +654,7 @@ async function generatePlan({
       attempts: dedupeAttempts,
       threshold: getThreshold(platform),
       previous_theme: previousTheme,
+      relaxed_fill_count: Math.max(0, finalItems.length - pass.accepted.length),
     },
     generation_mode: mode,
     createdAt: new Date().toISOString(),

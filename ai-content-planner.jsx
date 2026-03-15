@@ -15,7 +15,10 @@ import {
 const API_BASE_URL = (() => {
   const envBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
   if (envBaseUrl) return envBaseUrl.replace(/\/$/, "");
-  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+  if (
+    typeof window !== "undefined" &&
+    ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)
+  ) {
     return "http://localhost:3001";
   }
   return "";
